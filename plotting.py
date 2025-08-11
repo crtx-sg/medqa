@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import pandas as pd
 from agents.base_agent import AgentResult
+import datetime
 
 def plot_hr_trend(data: dict):
     """Plots a heart rate trend."""
@@ -43,11 +44,23 @@ def plot_ews_trend(data: dict):
     plt.tight_layout()
     return fig
 
+def display_vitals_table(data: dict):
+    """Prepares patient vitals data for display in a table."""
+    if 'vitals' not in data:
+        return pd.DataFrame() # Return empty dataframe if data is missing
+        
+    df = pd.DataFrame(data['vitals'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s').dt.strftime('%Y-%m-%d %H:%M:%S')
+    
+    # Reorder columns for better readability
+    display_columns = ['timestamp', 'hr', 'rr', 'bp', 'temp', 'spo2', 'loc', 'fluid_output']
+    df = df[[col for col in display_columns if col in df.columns]]
+    return df
 
 def plot_agent_result(result: AgentResult):
     """
-    Master plotting function that routes to the correct plotter
-    based on the result's plot_type.
+    Master plotting function that routes to the correct plotter or table formatter.
+    Returns a Matplotlib figure or a Pandas DataFrame.
     """
     if not result.plot_data or not result.plot_type:
         return None
@@ -56,6 +69,7 @@ def plot_agent_result(result: AgentResult):
         "hr_trend": plot_hr_trend,
         "ecg_waveform": plot_ecg_waveform,
         "ews_trend": plot_ews_trend,
+        "vitals_table": display_vitals_table,
     }
 
     plot_function = plot_functions.get(result.plot_type)

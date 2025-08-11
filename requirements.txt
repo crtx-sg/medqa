@@ -12,5 +12,6 @@ pymupdf
 pytesseract
 pillow
 pymilvus
+beautifulsoup4
 sentence-transformers
 ollama

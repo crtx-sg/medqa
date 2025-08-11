@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from config import (
     AVAILABLE_MODELS, MED_AGENT_MODELS, 
     SUPPORTED_VECTOR_DBS, SUPPORTED_EMBEDDINGS
@@ -6,8 +7,9 @@ from config import (
 from orchestrator import build_demo_system
 from plotting import plot_agent_result
 from utils.logging_config import AppLogger
-from utils.rag_tool import AdvancedRAGTool
+from tools.rag_tool import AdvancedRAGTool
 from langchain_community.llms import Ollama
+from agents.base_agent import AgentResult
 
 def main():
     st.set_page_config(page_title="Clinical Intelligence System", layout="wide")
@@ -30,16 +32,11 @@ def main():
             ### The Specialized Agents
             The system's power comes from its team of specialized agents:
             
-            * **Nurse Agent 📈:** The frontline expert for real-time patient data. It handles queries about vital signs (like HR trends), analyzes patient deterioration using the Modified Early Warning Score (MEWS), and can retrieve specific data like ECG waveforms.
-            * **EMR Agent 📂:** The digital records clerk. It connects to the Electronic Medical Records (EMR) system to retrieve historical patient documents, such as past discharge summaries, lab results, or radiology reports.
-            * **RAG Agent 📄:** The go-to expert for information contained within specific documents. Users can upload PDFs (like technical manuals or device specifications), and this agent will search that private knowledge base to answer questions.
-            * **Web Agent 🌐:** For the most up-to-date, external information, the Web Agent is dispatched. It scrapes public websites (like PubMed or Mayo Clinic) to answer questions about the latest research or news.
-            * **MedAgent 🧑‍⚕️:** The general medical consultant. It uses a specialized, medically-trained LLM (like Meditron) to answer complex medical questions, explain clinical guidelines, or tackle USMLE-style problems.
-            
-            ---
-            
-            ### Configurability
-            The entire system is highly configurable. Users can select different Large Language Models (LLMs) for both the general-purpose agents and the specialized MedAgent. Furthermore, the RAG Agent's underlying infrastructure, including the choice of vector database (like Qdrant or Milvus) and embedding models, can be easily configured through the user interface.
+            * **Nurse Agent 📈:** The frontline expert for real-time patient data.
+            * **EMR Agent 📂:** The digital records clerk for historical patient documents.
+            * **RAG Agent 📄:** The expert for information contained within uploaded documents.
+            * **Web Agent 🌐:** For the most up-to-date, external information.
+            * **MedAgent 🧑‍⚕️:** The general medical consultant using a specialized LLM.
             """)
 
     # Initialize session state
@@ -55,16 +52,14 @@ def main():
             general_model_selection = st.selectbox(
                 "Choose a General Purpose Model", 
                 options=list(AVAILABLE_MODELS.keys()), 
-                format_func=lambda x: AVAILABLE_MODELS[x],
-                help="Model for Nurse, EMR, and Web agents."
+                format_func=lambda x: AVAILABLE_MODELS[x]
             )
             
             st.subheader("Medical Agent")
             med_model_selection = st.selectbox(
                 "Choose a Specialist Model", 
                 options=list(MED_AGENT_MODELS.keys()), 
-                format_func=lambda x: MED_AGENT_MODELS[x],
-                help="Specialized model for the MedAgent (for medical Q&A)."
+                format_func=lambda x: MED_AGENT_MODELS[x]
             )
             
             st.divider()
@@ -118,16 +113,14 @@ def main():
         if st.session_state.system_initialized:
             st.success("✅ System Initialized")
         
-        # Move the Coherentix Labs link to the bottom of the sidebar
         st.markdown(
             '<div style="margin-top: 2em;"><a href="http://www.coherentix.com" target="_blank" style="font-size: 12px; color: grey; text-decoration: none;">Coherentix Labs</a></div>',
             unsafe_allow_html=True
         )
 
-
     # --- Main Interface ---
     st.subheader("Enter Your Query")
-    user_query = st.text_area("e.g., 'What is the standard treatment for type 2 diabetes?' or 'Summarize the findings in the uploaded PDF'", height=100)
+    user_query = st.text_area("e.g., 'Show me the vitals for patient CARD101 in a table'", height=100)
 
     if st.button("Submit Query"):
         if not st.session_state.system_initialized:
@@ -141,8 +134,10 @@ def main():
                     orchestrator = build_demo_system(
                         general_model_name=general_model_selection,
                         med_model_name=med_model_selection,
+                        rag_llm_name=rag_llm_model,
                         rag_tool_instance=st.session_state.rag_tool,
-                        logger=app_logger
+                        logger=app_logger,
+                        ollama_base_url="http://localhost:11434"
                     )
                     
                     result = orchestrator.handle(user_query)
@@ -154,9 +149,13 @@ def main():
                     
                     st.markdown(result.text)
 
+                    # --- UPDATED DISPLAY LOGIC ---
                     if result.plot_data:
-                        fig = plot_agent_result(result)
-                        if fig: st.pyplot(fig)
+                        output = plot_agent_result(result)
+                        if isinstance(output, pd.DataFrame):
+                            st.dataframe(output)
+                        elif output: # Assumes it's a matplotlib figure
+                            st.pyplot(output)
                     
                     with st.expander("Show Processing Logs"):
                         st.text_area("", "".join(app_logger.get_logs()), height=200)

@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 
 from orchestrator import build_demo_system
 from utils.logging_config import AppLogger
-from utils.rag_tool import AdvancedRAGTool
+from tools.rag_tool import AdvancedRAGTool
 from langchain_community.llms import Ollama
 
 # --- Data Models for API Requests and Responses ---
@@ -20,7 +20,6 @@ class AgentResponse(BaseModel):
     plot_type: str | None = None
 
 # --- Global State Management ---
-# This dictionary will hold our initialized orchestrator
 state = {}
 
 # --- Lifespan Management (for model loading) ---
@@ -33,29 +32,23 @@ async def lifespan(app: FastAPI):
     app_logger = AppLogger()
     
     # Read model and host configurations from environment variables
-    # These are set in your docker-compose.yml file
     general_model = os.getenv("GENERAL_MODEL", "qwen2:7b")
     med_model = os.getenv("MED_MODEL", "meditron:7b")
+    # Add the RAG LLM model from environment variables
+    rag_model = os.getenv("RAG_MODEL", "qwen2:7b") 
     ollama_host = os.getenv("OLLAMA_HOST", "localhost")
     ollama_base_url = f"http://{ollama_host}:11434"
     
-    # In a real production system, you would initialize your RAG tool here.
-    # This might involve connecting to a persistent vector database.
-    # For this example, we'll pass None, and the RAG agent will be disabled.
     rag_tool_instance = None 
 
-    # We need to update the build_demo_system function to accept the Ollama base URL
-    # For now, we assume the orchestrator and agents can be configured with it.
-    # Let's modify the build_demo_system logic conceptually here:
-    
-    # Update Ollama instances to use the configured host
-    Ollama.default_ollama_base_url = ollama_base_url
-
+    # Correctly call build_demo_system with all required arguments
     state["orchestrator"] = build_demo_system(
         general_model_name=general_model,
         med_model_name=med_model,
+        rag_llm_name=rag_model, # Pass the RAG model
         rag_tool_instance=rag_tool_instance,
-        logger=app_logger
+        logger=app_logger,
+        ollama_base_url=ollama_base_url # Pass the Ollama URL
     )
     print("INFO:     System Initialized and ready to accept requests.")
     yield
