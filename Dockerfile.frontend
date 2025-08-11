@@ -1,0 +1,25 @@
+# Use a slim Python image as a base
+FROM python:3.11-slim
+
+# Set the working directory inside the container
+WORKDIR /app
+
+# Copy the frontend-specific requirements file
+# Note: You should create a separate, smaller requirements_frontend.txt
+# For now, we'll reuse the main one for simplicity.
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the necessary files for the frontend
+COPY app.py .
+COPY config.py .
+# The plotting and config files are needed for UI elements
+COPY plotting.py .
+COPY utils/logging_config.py ./utils/
+
+# Command to run the Streamlit app
+# This will be the default command when the container starts
+CMD ["streamlit", "run", "app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+

@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # 1. The Ollama Service
+  ollama:
+    image: ollama/ollama
+    container_name: ollama_service
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+  # 2. The FastAPI Backend Service
+  fastapi_backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend # A dedicated Dockerfile for the API
+    container_name: fastapi_backend_service
+    ports:
+      - "8000:8000"
+    environment:
+      - GENERAL_MODEL=qwen2:7b
+      - MED_MODEL=meditron:7b
+      - OLLAMA_HOST=ollama # Service name for networking
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # 3. The Streamlit Frontend Service
+  streamlit_frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend # A dedicated Dockerfile for the UI
+    container_name: streamlit_frontend_service
+    ports:
+      - "8501:8501"
+    environment:
+      - API_HOST=fastapi_backend # Service name for networking
+    depends_on:
+      - fastapi_backend
+    restart: unless-stopped
+
+volumes:
+  ollama_data: # This persists the downloaded models

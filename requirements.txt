@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+streamlit
+requests
+langchain-community
+pandas
+matplotlib
+scipy
+scikit-learn
+qdrant-client
+pymupdf
+pytesseract
+pillow
+pymilvus
+sentence-transformers
+ollama

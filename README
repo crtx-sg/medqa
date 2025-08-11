@@ -1,0 +1,62 @@
+
+Clinical Intelligence System
+----------------------------
+
+System Overview
+---------------
+This Clinical Intelligence System is a sophisticated, multi-agent framework designed to assist healthcare professionals by providing quick and accurate answers to a wide range of clinical, technical, and research-related queries.
+
+At its core is an Orchestrator that intelligently analyzes a user's natural language query. It identifies the user's intent and routes the request to one or more specialized agents, each with a distinct area of expertise. If multiple agents are needed, the orchestrator consolidates their findings into a single, coherent response.
+
+The Specialized Agents
+~~~~~~~~~~~~~~~~~~~~~~
+The system's power comes from its team of specialized agents:
+
+Nurse Agent: This agent is the frontline expert for real-time patient data. It handles queries about vital signs (like HR trends), analyzes patient deterioration using the Modified Early Warning Score (MEWS), and can retrieve specific data like ECG waveforms.
+
+EMR Agent: This agent serves as the digital records clerk. It connects to the Electronic Medical Records (EMR) system to retrieve historical patient documents, such as past discharge summaries, lab results, or radiology reports.
+
+RAG Agent: The Retrieval-Augmented Generation (RAG) agent is the go-to expert for information contained within specific documents. Users can upload PDFs (like technical manuals or device specifications), and this agent will search that private knowledge base to answer questions.
+
+Web Agent: For the most up-to-date, external information, the Web Agent is dispatched. It scrapes public websites (like PubMed or Mayo Clinic) to answer questions about the latest research or news.
+
+MedAgent:  This agent acts as a general medical consultant. It uses a specialized, medically-trained LLM (like Meditron) to answer complex medical questions, explain clinical guidelines, or tackle USMLE-style problems.
+
+Configurability
+~~~~~~~~~~~~~~~
+The entire system is highly configurable. As shown in the Canvas, users can select different Large Language Models (LLMs) for both the general-purpose agents and the specialized MedAgent. Furthermore, the RAG Agent's underlying infrastructure, including the choice of vector database (like Qdrant or Milvus) and embedding models, can be easily configured through the user interface.
+
+Setup
+~~~~~
+
+method 1: To run as standalone monolithic application:
+
+python -m venv medqa-env
+source medqa-env/bin/activate
+pip install -r requirements.txt
+streamlit run app.py
+Access the URL
+
+method 2: To run as app server, separating backend and frontend (app-server.py) layers
+
+python -m venv medqa-env
+source medqa-env/bin/activate
+pip install -r requirements.txt
+
+On terminal 1: uvicorn api_server:app --reload
+On terminal 2: streamlit run app_server.py
+
+Access the URL
+
+
+method 3: using docker
+
+build docker images
+docker build -t medqa-backend -f Dockerfile.backend .
+docker build -t medqa-frontend -f Dockerfile.frontend .
+
+to start the services:
+docker-compose up -d
+
+to stop the services:
+docker-compose down
