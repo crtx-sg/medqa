@@ -19,7 +19,7 @@ def main():
     with col1:
         st.title("🩺 Clinical Intelligence System")
     with col2:
-        st.write("##") # Adds vertical space to align the popover button
+        st.write("##") 
         with st.popover("❔ Help"):
             st.markdown("""
             ### Clinical Intelligence System
@@ -30,8 +30,6 @@ def main():
             ---
             
             ### The Specialized Agents
-            The system's power comes from its team of specialized agents:
-            
             * **Nurse Agent 📈:** The frontline expert for real-time patient data.
             * **EMR Agent 📂:** The digital records clerk for historical patient documents.
             * **RAG Agent 📄:** The expert for information contained within uploaded documents.
@@ -151,11 +149,8 @@ def main():
 
                     # --- UPDATED DISPLAY LOGIC ---
                     if result.plot_data:
-                        output = plot_agent_result(result)
-                        if isinstance(output, pd.DataFrame):
-                            st.dataframe(output)
-                        elif output: # Assumes it's a matplotlib figure
-                            st.pyplot(output)
+                        # The plot_agent_result function now handles rendering directly
+                        plot_agent_result(result, st)
                     
                     with st.expander("Show Processing Logs"):
                         st.text_area("", "".join(app_logger.get_logs()), height=200)

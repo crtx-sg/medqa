@@ -1,8 +1,9 @@
 import streamlit as st
+import pandas as pd
 import requests
 import os
-from agents.base_agent import AgentResult # Needed for mocking result for plotter
 from plotting import plot_agent_result
+from agents.base_agent import AgentResult
 
 def main():
     st.set_page_config(page_title="Clinical Intelligence System", layout="wide")
@@ -12,7 +13,7 @@ def main():
     with col1:
         st.title("🩺 Clinical Intelligence System")
     with col2:
-        st.write("##") # Adds vertical space to align the popover button
+        st.write("##") 
         with st.popover("❔ Help"):
             st.markdown("""
             ### Clinical Intelligence System
@@ -23,18 +24,16 @@ def main():
             ---
             
             ### The Specialized Agents
-            The system's power comes from its team of specialized agents:
-            
-            * **Nurse Agent 📈:** The frontline expert for real-time patient data. It handles queries about vital signs (like HR trends), analyzes patient deterioration using the Modified Early Warning Score (MEWS), and can retrieve specific data like ECG waveforms.
-            * **EMR Agent 📂:** The digital records clerk. It connects to the Electronic Medical Records (EMR) system to retrieve historical patient documents, such as past discharge summaries, lab results, or radiology reports.
-            * **RAG Agent 📄:** The go-to expert for information contained within specific documents. Users can upload PDFs (like technical manuals or device specifications), and this agent will search that private knowledge base to answer questions.
-            * **Web Agent 🌐:** For the most up-to-date, external information, the Web Agent is dispatched. It scrapes public websites (like PubMed or Mayo Clinic) to answer questions about the latest research or news.
-            * **MedAgent 🧑‍⚕️:** The general medical consultant. It uses a specialized, medically-trained LLM (like Meditron) to answer complex medical questions, explain clinical guidelines, or tackle USMLE-style problems.
+            * **Nurse Agent 📈:** The frontline expert for real-time patient data.
+            * **EMR Agent 📂:** The digital records clerk for historical patient documents.
+            * **RAG Agent 📄:** The expert for information contained within uploaded documents.
+            * **Web Agent 🌐:** For the most up-to-date, external information.
+            * **MedAgent 🧑‍⚕️:** The general medical consultant using a specialized LLM.
             """)
 
     # --- Sidebar ---
     with st.sidebar:
-        st.info("System configuration is managed by the deployment environment (e.g., docker-compose.yml).")
+        st.info("System configuration is managed by the backend API server.")
         st.markdown(
             '<div style="margin-top: 2em;"><a href="http://www.coherentix.com" target="_blank" style="font-size: 12px; color: grey; text-decoration: none;">Coherentix Labs</a></div>',
             unsafe_allow_html=True
@@ -42,7 +41,7 @@ def main():
 
     # --- Main Interface ---
     st.subheader("Enter Your Query")
-    user_query = st.text_area("e.g., 'Plot the EWS trend for patient A over 48 hours'", height=100)
+    user_query = st.text_area("e.g., 'Show me the vitals for patient CARD101 in a table'", height=100)
 
     if st.button("Submit Query"):
         if not user_query:
@@ -61,30 +60,29 @@ def main():
                     
                     api_result = response.json()
                     
-                    # Display the results received from the API
                     st.subheader("Agent Response")
                     routed_to_list = api_result.get('routed_to', ['N/A'])
                     routed_to_str = ', '.join([name.title() for name in routed_to_list])
                     st.markdown(f"**Agent(s) Queried: `{routed_to_str}`**")
+                    
                     st.markdown(api_result.get("response_text"))
 
-                    # Check for and render plot data returned from the API
+                    # --- UPDATED DISPLAY LOGIC ---
                     if api_result.get("plot_data"):
-                        # Create a mock result object to pass to the plotter function
+                        # Create a mock AgentResult object to pass to the plotter
                         mock_result = AgentResult(
                             success=True,
                             text="",
                             plot_data=api_result["plot_data"],
                             plot_type=api_result["plot_type"]
                         )
-                        fig = plot_agent_result(mock_result)
-                        if fig:
-                            st.pyplot(fig)
-
+                        # The plot_agent_result function now handles rendering directly
+                        plot_agent_result(mock_result, st)
+                    
                 except requests.exceptions.ConnectionError:
                      st.error(f"Could not connect to the API server at {api_url}. Please ensure the backend service is running.")
                 except Exception as e:
-                    st.error(f"An unexpected error occurred: {e}")
+                    st.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     main()

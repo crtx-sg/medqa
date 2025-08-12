@@ -21,19 +21,9 @@ class ClinicalDataTools:
             "Jessica Davis", "David Miller", "Sarah Wilson", "James Moore", "Linda Taylor"
         ]
         
-        allergies = [["Penicillin"], ["Sulfa"], ["None"], ["Ibuprofen"], ["Codeine"]]
-        diets = ["Low Sodium", "Diabetic", "Regular", "Heart Healthy", "Renal"]
-        prescriptions = [
-            ["Lisinopril 10mg", "Metformin 500mg"],
-            ["Aspirin 81mg", "Atorvastatin 20mg"],
-            ["Levothyroxine 50mcg", "Amlodipine 5mg"],
-            ["Warfarin 5mg", "Furosemide 40mg"],
-            ["Chemotherapy Cycle A", "Ondansetron 8mg"]
-        ]
-
         patient_counter = 0
         for ward, prefix in wards.items():
-            for j in range(3): # Create 3 patients per ward
+            for j in range(3):
                 if patient_counter < len(patient_names):
                     patient_id = f"{prefix}{101+j}"
                     self.patients[patient_id] = {
@@ -43,117 +33,177 @@ class ClinicalDataTools:
                         "room": f"{prefix[0]}{j+1}",
                         "bed": random.choice(["A", "B"]),
                         "doctor": random.choice(doctors),
-                        "protocol": {
-                            "prescriptions": random.choice(prescriptions),
-                            "diet": random.choice(diets),
-                            "allergies": random.choice(allergies)
-                        }
+                        "medications": {"Lisinopril": "10mg daily", "Metformin": "500mg twice daily"},
+                        "history": {"Hypertension", "Type 2 Diabetes"},
                     }
                     patient_counter += 1
 
-    def list_wards(self, params=None):
-        self.logger.log("TOOL: Listing all hospital wards.")
-        return {"wards": list(set(p['ward'] for p in self.patients.values()))}
-
-    def list_patients_by_ward(self, params):
-        ward = params.get("ward")
-        self.logger.log(f"TOOL: Listing patients for ward: {ward}")
-        patients_in_ward = [p for p in self.patients.values() if p['ward'].lower() == ward.lower()]
-        return {"patients": patients_in_ward}
-
-    def get_patient_by_id(self, patient_id):
-        return self.patients.get(patient_id)
-
-    def get_patient_protocol(self, params):
+    def _find_patient(self, params):
         patient_id = params.get("patient_id")
-        self.logger.log(f"TOOL: Getting protocol for patient: {patient_id}")
-        patient = self.get_patient_by_id(patient_id)
-        return patient.get("protocol", {}) if patient else {}
+        patient_name = params.get("patient_name")
+        ward_name = params.get("ward_name")
 
-    def get_patient_vitals(self, params):
-        patient_id = params.get("patient_id")
-        duration_hours = params.get("duration_hours", 24)
-        self.logger.log(f"TOOL: Getting vitals for patient {patient_id} over {duration_hours}h.")
+        if patient_id and patient_id in self.patients:
+            return self.patients[patient_id]
         
-        now = int(time.time())
-        vitals = []
-        for i in range(duration_hours * 4): # Every 15 mins
-            ts = now - i * 900
-            vitals.append({
-                "timestamp": ts,
+        if patient_name:
+            for p in self.patients.values():
+                if p['name'].lower() == patient_name.lower():
+                    return p
+        
+        if ward_name:
+            for p in self.patients.values():
+                if p['ward'].lower() == ward_name.lower():
+                    return p
+        return None
+
+    def get_patient_info(self, params: dict) -> dict:
+        self.logger.log(f"TOOL: Getting single patient info with params: {params}")
+        patient = self._find_patient(params)
+        if not patient:
+            return {"error": "Patient not found."}
+
+        fs = 250
+        t = [i / fs for i in range(12 * fs)]
+        ecg_signal = [math.sin(2 * math.pi * 1.0 * tt) * (1 + 0.05 * random.uniform(-1, 1)) for tt in t]
+
+        return {
+            "patient_name": patient["name"],
+            "patient_id": patient["id"],
+            "ward_name": patient["ward"],
+            "room": patient["room"],
+            "bed": patient["bed"],
+            "doctor_name": patient["doctor"],
+            "medications": patient["medications"],
+            "history": list(patient["history"]),
+            "vitals": {
                 "hr": random.randint(65, 85),
                 "rr": random.randint(14, 20),
                 "bp": f"{random.randint(110, 130)}/{random.randint(70, 85)}",
-                "temp": round(random.uniform(97.5, 99.0), 1),
+                "temperature": round(random.uniform(97.5, 99.0), 1),
                 "spo2": random.randint(96, 99),
-                "loc": "Alert",
-                "fluid_output": random.randint(30, 60)
-            })
-        return {"patient_id": patient_id, "vitals": vitals}
-
-    def get_patient_last_ecg(self, params):
-        patient_id = params.get("patient_id")
-        self.logger.log(f"TOOL: Getting last ECG for patient: {patient_id}")
-        fs = 250
-        t = [i / fs for i in range(12 * fs)]
-        signal = [math.sin(2 * math.pi * 1.0 * tt) * (1 + 0.05 * random.uniform(-1, 1)) for tt in t]
-        return {
-            "patient_id": patient_id,
-            "timestamp": int(time.time()) - random.randint(300, 600),
-            "lead": "II",
-            "fs": fs,
-            "t": t,
-            "signal": signal
+                "ews_score": random.randint(1, 4) # EWS score moved inside vitals
+            },
+            "ecg": ecg_signal,
+            "alarms": {}
         }
 
-    def get_patient_image_study(self, params):
-        patient_id = params.get("patient_id")
-        self.logger.log(f"TOOL: Getting image study for patient: {patient_id}")
-        return {"patient_id": patient_id, "dicom_uid": f"1.2.840.{random.randint(10000, 99999)}"}
+    def get_all_patients_info(self, params: dict) -> dict:
+        """Case 2: Get a consolidated snapshot for all patients with EWS in vitals."""
+        self.logger.log("TOOL: Getting all patients info snapshot.")
+        response = {
+            "patients": [], "patient_id": [], "ward_name": [], "room": [],
+            "bed": [], "doctor_name": [], "vitals": []
+        }
+        now = int(time.time())
+        for pid, pdata in self.patients.items():
+            response["patients"].append(pdata["name"])
+            response["patient_id"].append(pid)
+            response["ward_name"].append(pdata["ward"])
+            response["room"].append(pdata["room"])
+            response["bed"].append(pdata["bed"])
+            response["doctor_name"].append(pdata["doctor"])
+            response["vitals"].append({
+                "timestamp": now - random.randint(60, 300),
+                "hr": random.randint(65, 85),
+                "rr": random.randint(14, 20),
+                "bp": f"{random.randint(110, 130)}/{random.randint(70, 85)}",
+                "temperature": round(random.uniform(97.5, 99.0), 1),
+                "spo2": random.randint(96, 99),
+                "ews_score": random.randint(1, 4)
+            })
+        return response
 
-    def get_patient_active_alarms(self, params):
-        patient_id = params.get("patient_id")
-        self.logger.log(f"TOOL: Getting active alarms for patient: {patient_id}")
+    def get_patient_alarms(self, params: dict) -> dict:
+        self.logger.log(f"TOOL: Getting patient alarms with params: {params}")
+        patient = self._find_patient(params)
+        if not patient:
+            return {"error": "Patient not found."}
+
+        alarms = []
+        for i in range(random.randint(1, 3)):
+            alarms.append({
+                "timestamp_value": int(time.time()) - random.randint(60, 3600),
+                "alarm_text": random.choice(["Critical HR Alert", "Low SPO2 Alert", "High BP Alert"]),
+                "vitals": {
+                    "hr": random.randint(100, 140), "rr": random.randint(22, 28),
+                    "bp": f"{random.randint(140, 160)}/{random.randint(90, 100)}",
+                    "temperature": round(random.uniform(99.0, 101.0), 1), "spo2": random.randint(88, 94)
+                },
+                "ecg": [random.uniform(-0.5, 0.5) for _ in range(100)]
+            })
+
         return {
-            "patient_id": patient_id,
-            "alarms": [
-                {"timestamp": int(time.time()) - 150, "alarm": "High Heart Rate", "value": "125 bpm"},
-                {"timestamp": int(time.time()) - 900, "alarm": "Low SpO2", "value": "91%"}
-            ]
+            "patient_name": patient["name"], "patient_id": patient["id"], "ward_name": patient["ward"],
+            "room": patient["room"], "bed": patient["bed"], "doctor_name": patient["doctor"], "alarms": alarms
+        }
+    
+    def get_patient_image_study(self, params: dict) -> dict:
+        self.logger.log(f"TOOL: Getting image study with params: {params}")
+        patient = self._find_patient(params)
+        if not patient:
+            return {"error": "Patient not found."}
+        return {
+            "patient_name": patient["name"],
+            "patient_id": patient["id"],
+            "study_type": "Chest X-Ray",
+            "dicom_uid": f"1.2.840.{random.randint(10000, 99999)}"
         }
 
-    def get_all_patients_last_ews(self, params=None):
-        self.logger.log("TOOL: Getting last EWS for all patients.")
-        ews_data = []
-        for patient_id in self.patients:
-            score = random.randint(0, 5)
-            ews_data.append({
-                "patient_id": patient_id,
-                "patient_name": self.patients[patient_id]['name'],
-                "ews_score": score,
-                "timestamp": int(time.time()) - random.randint(60, 1800)
-            })
-        return {"patients_ews": ews_data}
-
-    def get_critical_patients(self, params=None):
-        self.logger.log("TOOL: Identifying critical patients via EWS trend.")
+    def get_critical_patients(self, params=None) -> dict:
+        self.logger.log("TOOL: Identifying critical patients based on MEWS policy.")
         critical_list = []
+        analyzer = EWSTrendAnalyzer()
+        now = datetime.datetime.now()
+
         for patient_id, patient_info in self.patients.items():
-            if random.random() < 0.2: # 20% chance of being critical
+            timestamps = [now - datetime.timedelta(hours=i) for i in range(6)]
+            if random.random() < 0.3:
+                ews_values = [3, 4, 4, 5, 6, 7]
+            else:
+                ews_values = [2, 3, 2, 3, 2, 3]
+            
+            analysis = analyzer.analyze_trend(timestamps, ews_values)
+            current_score = ews_values[-1]
+            
+            is_critical = False
+            reason = ""
+
+            if analysis.get('patient_status') == 'deteriorating':
+                is_critical = True
+                reason = f"Deteriorating Trend (Confidence: {analysis.get('confidence')})"
+
+            if current_score >= 7:
+                is_critical = True
+                reason = f"High MEWS Score ({current_score})"
+
+            if is_critical:
                 critical_list.append({
                     "patient_id": patient_id,
                     "name": patient_info['name'],
                     "room": patient_info['room'],
                     "bed": patient_info['bed'],
-                    "status": "Deteriorating",
-                    "confidence": "High"
+                    "current_mews": current_score,
+                    "reason": reason
                 })
         return {"critical_patients": critical_list}
 
-    def get_patient_order_for_rounds(self, params):
-        ward = params.get("ward")
-        self.logger.log(f"TOOL: Getting patient round order for ward: {ward}")
-        patients_in_ward = [p for p in self.patients.values() if p['ward'].lower() == ward.lower()]
-        random.shuffle(patients_in_ward)
-        return {"rounding_order": [p['name'] for p in patients_in_ward]}
+    def get_patient_vitals_trend(self, params: dict) -> dict:
+        patient_id = params.get("patient_id") or params.get("patient_name")
+        duration_hours = params.get("duration_hours", 24)
+        self.logger.log(f"TOOL (STUB): Getting vitals trend for patient {patient_id} over {duration_hours} hours.")
+
+        patient = self._find_patient(params)
+        if not patient:
+            return {"error": "Patient not found for trend analysis."}
+
+        now = datetime.datetime.now()
+        timestamps = [now - datetime.timedelta(hours=i) for i in range(duration_hours)]
+        ews_values = [random.randint(1, 4) + (1 if i < duration_hours / 2 else -1) for i in range(duration_hours)]
+        
+        return {
+            "patient_id": patient['id'],
+            "timestamps": timestamps,
+            "ews_values": ews_values
+        }
 

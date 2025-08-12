@@ -26,15 +26,11 @@ class Orchestrator:
         """Creates a structured definition of all available tools for the LLM router."""
         self.tool_definitions = [
             # Nurse Agent Tools
-            {"agent": "nurse", "function": "list_wards", "description": "Lists all hospital care units or wards. Use when the user asks to see all wards."},
-            {"agent": "nurse", "function": "list_patients_by_ward", "description": "Lists all patients in a specific ward. Requires a 'ward' parameter (e.g., 'Cardiology'). Use when the user wants to see patients in a particular unit."},
-            {"agent": "nurse", "function": "get_patient_protocol", "description": "Retrieves the treatment protocol (prescriptions, diet, allergies) for a specific patient. Requires a 'patient_id' parameter."},
-            {"agent": "nurse", "function": "get_patient_vitals", "description": "Retrieves a patient's vital signs over a specified period. Requires 'patient_id' and 'duration_hours' parameters."},
-            {"agent": "nurse", "function": "get_patient_last_ecg", "description": "Gets the most recent 12-second ECG strip for a patient. Requires a 'patient_id' parameter."},
-            {"agent": "nurse", "function": "get_patient_active_alarms", "description": "Gets all active clinical alarms for a specific patient. Requires a 'patient_id' parameter."},
-            {"agent": "nurse", "function": "get_all_patients_last_ews", "description": "Retrieves the last updated Early Warning Score for all patients."},
-            {"agent": "nurse", "function": "get_critical_patients", "description": "Lists all patients whose EWS trend indicates deterioration."},
-            {"agent": "nurse", "function": "get_patient_order_for_rounds", "description": "Provides the list of patients in a ward, ordered by criticality. Requires a 'ward' parameter."},
+            {"agent": "nurse", "function": "get_patient_info", "description": "Retrieves a comprehensive snapshot of a single patient's data, including vitals, protocol, and location. Use for any query about a specific patient. Requires one of 'patient_id', 'patient_name', or 'ward_name'."},
+            {"agent": "nurse", "function": "get_all_patients_info", "description": "Retrieves a summary snapshot of all patients in the hospital, including their latest vitals and EWS scores. Use for queries about 'all patients' or an overview of the hospital status."},
+            {"agent": "nurse", "function": "get_patient_alarms", "description": "Retrieves detailed information about recent alarms for a specific patient. Requires one of 'patient_id', 'patient_name', or 'ward_name'."},
+            {"agent": "nurse", "function": "get_critical_patients", "description": "Lists all patients who are currently considered critical, either due to a deteriorating EWS/MEWS trend or a high score (>= 7) based on hospital policy."},
+            {"agent": "nurse", "function": "get_patient_vitals_trend", "description": "Retrieves time-series data for a patient's vitals over a specified duration. Requires 'patient_id' and 'duration_hours'."},
             {"agent": "nurse", "function": "analyze_ews_trend", "description": "Performs a trend analysis on a patient's EWS scores. Use for queries about 'patient improvement' or 'deterioration'. Requires 'patient_id' and 'duration_hours'."},
             
             # EMR Agent Tools
@@ -52,59 +48,40 @@ class Orchestrator:
         ]
 
     def intent_classify_with_llm(self, user_input: str) -> Optional[Dict[str, Any]]:
-        """Uses an LLM to classify intent and extract parameters."""
-        
+        # ... (This method remains the same)
         prompt = f"""
         You are an intelligent hospital operations router. Your task is to analyze a user's query and determine which tool should be used to answer it.
-        
         Here are the available tools:
         {json.dumps(self.tool_definitions, indent=2)}
-
         User Query: "{user_input}"
-
-        Based on the query, which is the single best tool to use?
         Respond ONLY with a valid JSON object containing the chosen 'agent', the 'function', and any necessary 'parameters'.
-        For example: {{"agent": "nurse", "function": "list_patients_by_ward", "parameters": {{"ward": "Cardiology"}}}}
-        If a parameter like 'patient_id' is mentioned as a name (e.g., "John Doe"), use the name.
         """
-        
         self.logger.log("Using LLM for intent classification...")
         response_str = self.llm.invoke(prompt)
-        
         try:
-            # Clean the response string to ensure it's valid JSON
             clean_response = response_str.strip().replace("```json", "").replace("```", "")
             response_json = json.loads(clean_response)
             self.logger.log(f"LLM routing decision: {response_json}")
             return response_json
         except (json.JSONDecodeError, KeyError) as e:
             self.logger.log(f"LLM routing failed or returned invalid JSON: {e}\nResponse: {response_str}")
-            return None # Fallback
+            return None
 
     def handle(self, user_input: str, context: Optional[Dict[str, Any]] = None) -> AgentResult:
-        """
-        Routes the request to the appropriate agent and tool using LLM-based classification.
-        """
+        # ... (This method remains the same)
         routing_decision = self.intent_classify_with_llm(user_input)
-        
         if not routing_decision:
             return AgentResult(False, "I could not understand the request. Please try rephrasing.")
-
         agent_key = routing_decision.get("agent")
         function_name = routing_decision.get("function")
         params = routing_decision.get("parameters", {})
-
         agent = self.agents.get(agent_key)
         if not agent:
             return AgentResult(False, f"Error: No agent found for key '{agent_key}'")
-
         self.logger.log(f"Routing to agent: {agent.name}, function: {function_name}, params: {params}")
-        
-        # The agent's handle method will now need to execute the specified function
         result = agent.handle(user_input, {"function": function_name, "params": params})
         result.metadata.update({"routed_to": [agent_key]})
         return result
-
 
 def build_demo_system(
     general_model_name: str, 
@@ -114,16 +91,12 @@ def build_demo_system(
     logger: AppLogger,
     ollama_base_url: str
 ) -> Orchestrator:
+    # ... (This function remains the same)
     logger.log(f"Building system with General: {general_model_name}, Medical: {med_model_name}, RAG: {rag_llm_name}")
-    
-    # Initialize LLM clients
     general_llm = Ollama(model=general_model_name, base_url=ollama_base_url)
     medical_llm = Ollama(model=med_model_name, base_url=ollama_base_url)
     rag_llm = Ollama(model=rag_llm_name, base_url=ollama_base_url)
-
-    # Initialize toolsets
     clinical_tools = ClinicalDataTools(logger)
-
     agents = {
         "nurse": NurseAgent(general_llm, clinical_tools, logger),
         "rag": RAGAgent(rag_llm, rag_tool_instance, logger),
@@ -131,8 +104,6 @@ def build_demo_system(
         "medagent": MedAgent(medical_llm, {}, logger),
         "webagent": WebAgent(general_llm, logger)
     }
-    
     logger.log("System build complete.")
-    # The orchestrator uses the general_llm for routing decisions
     return Orchestrator(general_llm, agents, logger)
 
