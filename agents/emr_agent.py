@@ -1,3 +1,4 @@
+# agents/emr_agent.py
 from typing import Dict, Any, Optional
 from langchain_community.llms import Ollama
 from agents.base_agent import BaseAgent, AgentResult
@@ -24,7 +25,6 @@ class EMRAgent(BaseAgent):
         if "error" in result_data:
             return AgentResult(False, result_data["error"])
 
-        # Use the LLM to create a human-readable summary of the result
         prompt = f"The user asked for an image study. The system retrieved the following data: {json.dumps(result_data)}. Summarize this for the user."
         summary = self.llm.invoke(prompt)
         return AgentResult(True, summary)
