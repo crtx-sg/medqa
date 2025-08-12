@@ -13,7 +13,7 @@ def display_single_patient_dashboard(data: dict, st):
         st.metric("Location", f"{data.get('room', 'N/A')}-{data.get('bed', 'N/A')}")
     with col2:
         st.metric("Attending Physician", data.get('doctor_name', 'N/A'))
-        st.metric("EWS Score", data.get('ews_score', 'N/A'))
+        st.metric("EWS Score", data.get('vitals', {}).get('ews_score', 'N/A'))
     with col3:
         st.write("**Medications:**")
         st.json(data.get('medications', {}))
@@ -51,11 +51,9 @@ def display_all_patients_table(data: dict):
     if not data or 'patients' not in data:
         return pd.DataFrame()
     
-    # Create DataFrame from the main patient info
     table_data = {k: v for k, v in data.items() if k != 'vitals'}
     df = pd.DataFrame(table_data)
     
-    # Extract the EWS score from the vitals list and add it to the DataFrame
     if 'vitals' in data and len(data['vitals']) == len(df):
         df['ews_score'] = [v.get('ews_score', 'N/A') for v in data['vitals']]
     
@@ -63,6 +61,64 @@ def display_all_patients_table(data: dict):
     df = df[[col for col in display_columns if col in df.columns]]
     df = df.rename(columns={"patients": "Name", "patient_id": "ID", "ward_name": "Ward", "room": "Room", "bed": "Bed", "doctor_name": "Doctor", "ews_score": "EWS"})
     return df
+
+def display_vitals_trend_table(data: dict):
+    """Prepares patient vitals trend data for display in a table."""
+    if 'vitals' not in data:
+        return pd.DataFrame()
+        
+    df = pd.DataFrame(data['vitals'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s').dt.strftime('%Y-%m-%d %H:%M:%S')
+    
+    display_columns = ['timestamp', 'hr', 'rr', 'bp', 'temperature', 'spo2', 'ews_score']
+    df = df[[col for col in display_columns if col in df.columns]]
+    return df
+
+def plot_patient_vitals_trend(data: dict):
+    """Plots the vitals trend for a single patient with multiple subplots."""
+    if 'vitals' not in data or not data['vitals']:
+        return None
+
+    df = pd.DataFrame(data['vitals'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='s')
+
+    if 'bp' in df.columns:
+        bp_split = df['bp'].str.split('/', expand=True)
+        df['bp_sys'] = pd.to_numeric(bp_split[0])
+        df['bp_dia'] = pd.to_numeric(bp_split[1])
+
+    fig, axes = plt.subplots(3, 2, figsize=(14, 12))
+    fig.suptitle(f"Vitals Trend for {data.get('patients', 'N/A')}", fontsize=16)
+    axes = axes.flatten()
+
+    vitals_to_plot = {
+        'hr': {'ax': axes[0], 'label': 'Heart Rate (bpm)', 'color': 'red'},
+        'rr': {'ax': axes[1], 'label': 'Respiratory Rate', 'color': 'blue'},
+        'spo2': {'ax': axes[2], 'label': 'SpO2 (%)', 'color': 'green'},
+        'temperature': {'ax': axes[3], 'label': 'Temperature (°F)', 'color': 'orange'},
+        'ews_score': {'ax': axes[4], 'label': 'EWS Score', 'color': 'purple'},
+    }
+
+    for key, props in vitals_to_plot.items():
+        if key in df.columns:
+            props['ax'].plot(df['timestamp'], df[key], marker='.', linestyle='-', color=props['color'])
+            props['ax'].set_title(props['label'])
+            props['ax'].grid(True, alpha=0.5)
+            props['ax'].tick_params(axis='x', rotation=45)
+
+    if 'bp_sys' in df.columns and 'bp_dia' in df.columns:
+        axes[5].plot(df['timestamp'], df['bp_sys'], marker='.', linestyle='-', color='black', label='Systolic')
+        axes[5].plot(df['timestamp'], df['bp_dia'], marker='.', linestyle='-', color='grey', label='Diastolic')
+        axes[5].set_title('Blood Pressure (mmHg)')
+        axes[5].grid(True, alpha=0.5)
+        axes[5].tick_params(axis='x', rotation=45)
+        axes[5].legend()
+    else:
+        fig.delaxes(axes[5])
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
+    return fig
+
 
 def plot_ews_trend(data: dict):
     """Plots an Early Warning Score trend."""
@@ -95,10 +151,17 @@ def plot_agent_result(result: AgentResult, st):
         df = display_all_patients_table(result.plot_data)
         st.dataframe(df)
         return
+        
+    if result.plot_type == "vitals_table":
+        df = display_vitals_trend_table(result.plot_data)
+        st.dataframe(df)
+        return
 
     fig = None
     if result.plot_type == "ews_trend":
         fig = plot_ews_trend(result.plot_data)
+    elif result.plot_type == "vitals_trend":
+        fig = plot_patient_vitals_trend(result.plot_data)
     
     if fig:
         st.pyplot(fig)

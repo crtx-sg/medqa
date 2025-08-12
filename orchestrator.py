@@ -30,7 +30,7 @@ class Orchestrator:
             {"agent": "nurse", "function": "get_all_patients_info", "description": "Retrieves a summary snapshot of all patients in the hospital, including their latest vitals and EWS scores. Use for queries about 'all patients' or an overview of the hospital status."},
             {"agent": "nurse", "function": "get_patient_alarms", "description": "Retrieves detailed information about recent alarms for a specific patient. Requires one of 'patient_id', 'patient_name', or 'ward_name'."},
             {"agent": "nurse", "function": "get_critical_patients", "description": "Lists all patients who are currently considered critical, either due to a deteriorating EWS/MEWS trend or a high score (>= 7) based on hospital policy."},
-            {"agent": "nurse", "function": "get_patient_vitals_trend", "description": "Retrieves time-series data for a patient's vitals over a specified duration. Requires 'patient_id' and 'duration_hours'."},
+            {"agent": "nurse", "function": "get_patient_vitals_trend", "description": "Retrieves time-series data for a specific patient's vitals over a duration. Use for queries asking to 'plot vitals' or see a 'vitals trend' for one patient. Requires 'patient_id' or 'patient_name' and 'duration_hours'."},
             {"agent": "nurse", "function": "analyze_ews_trend", "description": "Performs a trend analysis on a patient's EWS scores. Use for queries about 'patient improvement' or 'deterioration'. Requires 'patient_id' and 'duration_hours'."},
             
             # EMR Agent Tools
